@@ -1,128 +1,80 @@
 import React, { useState, useEffect, useRef } from 'react';
-import "./ChatPage.css";
-import ChatHeader from './ChatHeader';
-import ReactMarkdown from 'react-markdown';
 
 const USER_ID = 'demo-user'; // In production, generate or fetch a real userId
 
 const ChatPage = () => {
-    const [messages, setMessages] = useState([]);
-    const [input, setInput] = useState('');
-    const [isTyping, setIsTyping] = useState(false);
-    const messagesEndRef = useRef(null);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const messagesEndRef = useRef(null);
 
-    // On mount, fetch the first question
-    useEffect(() => {
-        const fetchFirstQuestion = async () => {
-            setIsTyping(true);
-            try {
-                const response = await fetch('https://german-bot-backend.onrender.com/api/ask', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: USER_ID })
-                });
-                const data = await response.json();
-                setIsTyping(false);
-                setMessages([{ user: 'Teacher', text: data.response }]);
-            } catch (error) {
-                setIsTyping(false);
-                setMessages([{ user: 'System', text: 'Fehler beim Laden der ersten Frage.' }]);
-            }
-        };
-        fetchFirstQuestion();
-    }, []);
-
-    const handleSend = async () => {
-        if (input.trim() !== '') {
-            setMessages(prev => [...prev, { user: 'User', text: input }]);
-            setInput('');
-            setIsTyping(true);
-
-            try {
-                const response = await fetch('http://localhost:3001/api/ask', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: USER_ID, answer: input })
-                });
-                const data = await response.json();
-                setIsTyping(false);
-
-                // Show feedback if present
-                if (data.feedback) {
-                    setMessages(prev => [
-                        ...prev,
-                        { user: 'Teacher', text: data.feedback }
-                    ]);
-                }
-                // Show next question or end message
-                if (data.response) {
-                    setMessages(prev => [
-                        ...prev,
-                        { user: 'Teacher', text: data.response }
-                    ]);
-                }
-            } catch (error) {
-                setIsTyping(false);
-                setMessages(prev => [
-                    ...prev,
-                    { user: 'System', text: 'Fehler bei der Verarbeitung deiner Antwort.' }
-                ]);
-            }
-        }
+  // On mount, fetch the welcome message and first question
+  useEffect(() => {
+    const fetchWelcome = async () => {
+      setIsTyping(true);
+      const res = await fetch('https://german-bot-backend.onrender.com/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: USER_ID })
+      });
+      const data = await res.json();
+      setMessages([{ from: 'bot', text: data.response }]);
+      setIsTyping(false);
     };
+    fetchWelcome();
+  }, []);
 
-    const handleKeyDown = (event) => {
-        if (event.key === 'Enter') {
-            handleSend();
-        }
-    };
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    setMessages(msgs => [...msgs, { from: 'user', text: input }]);
+    setIsTyping(true);
 
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages, isTyping]);
+    const res = await fetch('https://german-bot-backend.onrender.com/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: USER_ID, answer: input })
+    });
+    const data = await res.json();
+    setMessages(msgs => [...msgs, { from: 'bot', text: data.response }]);
+    setInput('');
+    setIsTyping(false);
+  };
 
-    return (
-        <div className="chat-container">
-            <ChatHeader />
-            <div className="chat-messages">
-                {messages.map((msg, index) => (
-                    <div key={index} className={`chat-message ${msg.user}`}>
-                        <div className="message-content">
-                            {msg.user === 'Teacher' ? (
-                                <ReactMarkdown>{msg.text}</ReactMarkdown>
-                            ) : (
-                                <div>{msg.text}</div>
-                            )}
-                        </div>
-                    </div>
-                ))}
-                {isTyping && (
-                    <div className="chat-message Teacher typing">
-                        <div className="message-content">
-                            <span className="dot"></span>
-                            <span className="dot"></span>
-                            <span className="dot"></span>
-                        </div>
-                    </div>
-                )}
-                <div ref={messagesEndRef} />
-            </div>
-            <div className="chat-input">
-                <input 
-                    type="text" 
-                    value={input} 
-                    onChange={(e) => setInput(e.target.value)} 
-                    onKeyDown={handleKeyDown} 
-                    placeholder="Antworte auf Deutsch..." 
-                />
-                <button onClick={handleSend}>Senden</button>
-            </div>
-        </div>
-    );
+  return (
+    <div style={{ maxWidth: 600, margin: '0 auto', padding: 24 }}>
+      <h2>German Quiz Chatbot</h2>
+      <div style={{ minHeight: 300, border: '1px solid #ccc', padding: 16, borderRadius: 8, marginBottom: 16, background: '#fafafa' }}>
+        {messages.map((msg, idx) => (
+          <div key={idx} style={{ margin: '12px 0', textAlign: msg.from === 'user' ? 'right' : 'left' }}>
+            <span style={{ background: msg.from === 'user' ? '#d1e7dd' : '#e2e3e5', padding: '8px 12px', borderRadius: 8, display: 'inline-block' }}>
+              {msg.text}
+            </span>
+          </div>
+        ))}
+        {isTyping && <div><em>Bot is typing...</em></div>}
+        <div ref={messagesEndRef} />
+      </div>
+      <form
+        onSubmit={e => {
+          e.preventDefault();
+          handleSend();
+        }}
+        style={{ display: 'flex', gap: 8 }}
+      >
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          placeholder="Type your answer..."
+          style={{ flex: 1, padding: 8, borderRadius: 4, border: '1px solid #ccc' }}
+        />
+        <button type="submit" style={{ padding: '8px 16px' }}>Send</button>
+      </form>
+    </div>
+  );
 };
 
 export default ChatPage;
